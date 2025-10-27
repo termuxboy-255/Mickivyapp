@@ -18,4 +18,9 @@ log_level = 1
 android.permissions = INTERNET,ACCESS_NETWORK_STATE
 android.api = 33
 android.minapi = 21
+android.sdk = 33
+android.ndk = 25b
 android.archs = arm64-v8a
+
+# Point to our pre-installed SDK
+android.sdk_path = ./android-sdk
