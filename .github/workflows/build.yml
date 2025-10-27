@@ -1,4 +1,5 @@
-name: CI
+name: Android Build CI
+
 on:
   push:
     branches: [ main ]
@@ -8,40 +9,82 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      # used to cache dependencies with a timeout
-      - name: Get Date
-        id: get-date
-        run: |
-          echo "date=$(/bin/date -u "+%Y%m%d")" >> $GITHUB_OUTPUT
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
-      - name: Cache Buildozer global directory
-        uses: actions/cache@v4
-        with:
-          path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            buildozer-global-
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-pip \
+          git \
+          wget \
+          zip \
+          unzip \
+          openjdk-11-jdk \
+          autoconf \
+          automake \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libffi-dev \
+          libssl-dev \
+          ninja-build \
+          build-essential
 
-      - name: Cache Buildozer local directory
-        uses: actions/cache@v4
-        with:
-          path: .buildozer
-          key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ steps.get-date.outputs.date }}-
-            ${{ runner.os }}-
+    - name: Install Android SDK
+      run: |
+        wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
+        mkdir -p android-sdk/cmdline-tools
+        unzip commandlinetools-linux-8512546_latest.zip -d android-sdk/cmdline-tools
+        mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
+        echo "ANDROID_SDK_ROOT=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$GITHUB_WORKSPACE/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
 
-      - name: Build with Buildozer
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer android debug
-          buildozer_version: master
+    - name: Install Buildozer and dependencies
+      run: |
+        pip install --upgrade pip wheel setuptools
+        pip install buildozer
+        pip install cython==0.29.33
+        pip install kivy kivymd requests pillow
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: package
-          path: ${{ steps.buildozer.outputs.filename }}
+    - name: Cache Buildozer directories
+      uses: actions/cache@v4
+      with:
+        path: |
+          .buildozer
+          .buildozer_global
+          ~/.buildozer
+          ~/.android
+          android-sdk/.temp
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          ${{ runner.os }}-buildozer-
+
+    - name: Initialize Buildozer
+      run: |
+        buildozer init || true
+        buildozer android clean
+
+    - name: Build APK with Buildozer
+      run: |
+        export ANDROID_SDK_ROOT=$GITHUB_WORKSPACE/android-sdk
+        export PATH=$GITHUB_WORKSPACE/android-sdk/cmdline-tools/latest/bin:$PATH
+        buildozer -v android debug
+      timeout-minutes: 45
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: micmac-betting-app
+        path: bin/*.apk
+        retention-days: 30
