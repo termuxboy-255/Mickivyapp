@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Tumia Ubuntu 22.04 badala ya latest
 
     steps:
     - name: Checkout code
@@ -22,8 +22,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y \
           python3-pip \
+          python3-venv \
           git \
           wget \
+          curl \
           zip \
           unzip \
           openjdk-11-jdk \
@@ -39,20 +41,25 @@ jobs:
           libffi-dev \
           libssl-dev \
           ninja-build \
-          build-essential
+          build-essential \
+          libsqlite3-dev \
+          libreadline-dev \
+          libbz2-dev \
+          libgdbm-dev \
+          tk-dev
 
     - name: Install Android SDK
       run: |
-        wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
         mkdir -p android-sdk/cmdline-tools
-        unzip commandlinetools-linux-8512546_latest.zip -d android-sdk/cmdline-tools
+        unzip -q commandlinetools-linux-8512546_latest.zip -d android-sdk/cmdline-tools
         mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
         echo "ANDROID_SDK_ROOT=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
         echo "PATH=$GITHUB_WORKSPACE/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
 
     - name: Install Buildozer and dependencies
       run: |
-        pip install --upgrade pip wheel setuptools
+        python -m pip install --upgrade pip wheel setuptools virtualenv
         pip install buildozer
         pip install cython==0.29.33
         pip install kivy kivymd requests pillow
@@ -65,8 +72,8 @@ jobs:
           .buildozer_global
           ~/.buildozer
           ~/.android
-          android-sdk/.temp
-        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
+          android-sdk
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'main.py') }}
         restore-keys: |
           ${{ runner.os }}-buildozer-
 
@@ -77,14 +84,18 @@ jobs:
 
     - name: Build APK with Buildozer
       run: |
-        export ANDROID_SDK_ROOT=$GITHUB_WORKSPACE/android-sdk
-        export PATH=$GITHUB_WORKSPACE/android-sdk/cmdline-tools/latest/bin:$PATH
         buildozer -v android debug
-      timeout-minutes: 45
+      timeout-minutes: 60
+
+    - name: List built APKs
+      run: |
+        ls -la bin/ || echo "No bin directory found"
 
     - name: Upload APK artifact
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: micmac-betting-app
         path: bin/*.apk
         retention-days: 30
+        if-no-files-found: warn
