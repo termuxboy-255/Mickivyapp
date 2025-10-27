@@ -6,7 +6,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Tumia Ubuntu 22.04 badala ya latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Checkout code
@@ -41,61 +41,33 @@ jobs:
           libffi-dev \
           libssl-dev \
           ninja-build \
-          build-essential \
-          libsqlite3-dev \
-          libreadline-dev \
-          libbz2-dev \
-          libgdbm-dev \
-          tk-dev
-
-    - name: Install Android SDK
-      run: |
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
-        mkdir -p android-sdk/cmdline-tools
-        unzip -q commandlinetools-linux-8512546_latest.zip -d android-sdk/cmdline-tools
-        mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
-        echo "ANDROID_SDK_ROOT=$GITHUB_WORKSPACE/android-sdk" >> $GITHUB_ENV
-        echo "PATH=$GITHUB_WORKSPACE/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+          build-essential
 
     - name: Install Buildozer and dependencies
       run: |
-        python -m pip install --upgrade pip wheel setuptools virtualenv
+        python -m pip install --upgrade pip wheel setuptools
         pip install buildozer
         pip install cython==0.29.33
-        pip install kivy kivymd requests pillow
 
-    - name: Cache Buildozer directories
+    - name: Cache Buildozer
       uses: actions/cache@v4
       with:
         path: |
           .buildozer
           .buildozer_global
           ~/.buildozer
-          ~/.android
-          android-sdk
-        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec', 'main.py') }}
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
         restore-keys: |
           ${{ runner.os }}-buildozer-
-
-    - name: Initialize Buildozer
-      run: |
-        buildozer init || true
-        buildozer android clean
 
     - name: Build APK with Buildozer
       run: |
         buildozer -v android debug
       timeout-minutes: 60
 
-    - name: List built APKs
-      run: |
-        ls -la bin/ || echo "No bin directory found"
-
     - name: Upload APK artifact
-      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: micmac-betting-app
         path: bin/*.apk
         retention-days: 30
-        if-no-files-found: warn
